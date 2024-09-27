@@ -532,7 +532,7 @@ class Xtts(BaseTTS):
         for sent in text:
             sent = sent.strip().lower()
             text_tokens = torch.IntTensor(self.tokenizer.encode(sent, lang=language)).unsqueeze(0).to(self.device)
-
+            print(f"inference: tokens_count:{text_tokens.shape[-1]}")
             assert (
                 text_tokens.shape[-1] < self.args.gpt_max_text_tokens
             ), " ❗ XTTS can only generate text with a maximum of 400 tokens."
@@ -711,7 +711,9 @@ class Xtts(BaseTTS):
         super().eval()
 
     def get_compatible_checkpoint_state_dict(self, model_path):
-        checkpoint = load_fsspec(model_path, map_location=torch.device("cpu"))["model"]
+        print(f"get_compatible_checkpoint_state_dict using {'mps' if torch.backends.mps.is_available() else 'cpu'} backend\n")
+        checkpoint = load_fsspec(model_path, map_location=torch.device('mps' if torch.backends.mps.is_available() else 'cpu'))["model"]
+        # checkpoint = load_fsspec(model_path, map_location=torch.device('cpu'))["model"]
         # remove xtts gpt trainer extra keys
         ignore_keys = ["torch_mel_spectrogram_style_encoder", "torch_mel_spectrogram_dvae", "dvae"]
         for key in list(checkpoint.keys()):
@@ -779,6 +781,7 @@ class Xtts(BaseTTS):
             if eval:
                 self.gpt.init_gpt_for_inference(kv_cache=self.args.kv_cache)
             self.load_state_dict(checkpoint, strict=strict)
+        self = torch.compile(self)
 
         if eval:
             self.hifigan_decoder.eval()
